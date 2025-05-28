@@ -124,8 +124,7 @@ func (h *Handlers) Book(c echo.Context) error {
 
 	req.EventID = eventID
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	err := h.ticketService.Booking(ctx, req.CustomerID, req.EventID)
 	if err != nil {
 		slog.Error(fmt.Sprintf("h.ticketService.Booking(custId: %v, eventID: %v)", req.CustomerID, req.EventID), "error", err)

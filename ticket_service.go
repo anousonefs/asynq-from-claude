@@ -282,11 +282,13 @@ func (ts *TicketService) Booking(ctx context.Context, customerID, eventID string
 
 func (ts *TicketService) onCustomerLeftProcessing(ctx context.Context, eventID string) {
 	// When someone leaves processing, try to process the next person in queue
+	println("=> start")
 	go func() {
 		if err := ts.processQueueForEvent2(ctx, eventID); err != nil {
 			slog.Error("ts.processQueueForEvent2", "eventID", eventID, "error", err)
 		}
 	}()
+	println("=> ended")
 }
 
 func (ts *TicketService) processQueueForEvent2(ctx context.Context, eventID string) error {

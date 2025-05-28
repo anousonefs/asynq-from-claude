@@ -18,11 +18,12 @@ const (
 )
 
 type TicketService struct {
-	redis *redis.Client
+	redis  *redis.Client
+	pubnub Pubnub
 }
 
-func NewTicketService(redis *redis.Client) *TicketService {
-	return &TicketService{redis: redis}
+func NewTicketService(redis *redis.Client, pubnub Pubnub) *TicketService {
+	return &TicketService{redis: redis, pubnub: pubnub}
 }
 
 func (ts *TicketService) TryEnterProcessing(ctx context.Context, customerID, eventID string) (bool, error) {
@@ -287,6 +288,7 @@ func (ts *TicketService) onCustomerLeftProcessing(ctx context.Context, eventID s
 		if err := ts.processQueueForEvent2(ctx, eventID); err != nil {
 			slog.Error("ts.processQueueForEvent2", "eventID", eventID, "error", err)
 		}
+		println("=> end goroutine")
 	}()
 	println("=> ended")
 }
@@ -334,8 +336,9 @@ func (ts *TicketService) processQueueForEvent2(ctx context.Context, eventID stri
 	}
 
 	if success {
-		// todo: pubnub notify
-		// ts.scheduleNotification(entry.CustomerID, eventID, "You can now select your tickets!", "proceed")
+		if _, err := ts.pubnub.Publish(ctx, entry.CustomerID, "you can now select your tickets!"); err != nil {
+			slog.Error("ts.pubnub.Publish()", "error", err)
+		}
 		slog.Info("Customer moved to processing", "customerID", entry.CustomerID, "eventID", eventID)
 	} else {
 		// If couldn't enter processing, put them back at the front of queue

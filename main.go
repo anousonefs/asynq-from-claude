@@ -21,9 +21,21 @@ func main() {
 	redisOpt := asynq.RedisClientOpt{Addr: "localhost:6379"}
 	redisClient := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 
+	cfg := PubNubConfig{
+		PublishKey: os.Getenv("PUBNUB_PUBLISH_KEY"),
+		SecretKey:  os.Getenv("PUBNUB_SECRET_KEY"),
+		UUIDKey:    os.Getenv("PUBNUB_UUID"),
+		UUIDSubKey: os.Getenv("PUBNUB_UUID_SUB_KEY"),
+	}
+
+	pubnub, err := NewPubnub(&cfg)
+	if err != nil {
+		panic(err)
+	}
+
 	// Initialize services
 	queueService := NewQueueService(redisClient)
-	ticketService := NewTicketService(redisClient)
+	ticketService := NewTicketService(redisClient, pubnub)
 	notificationService := NewNotificationService() // PubNub integration
 
 	// Initialize Asynq client and server

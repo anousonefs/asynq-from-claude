@@ -52,7 +52,7 @@ func main() {
 
 	// Start server
 	go func() {
-		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
+		if err := e.Start(":8081"); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Server failed to start:", err)
 		}
 	}()

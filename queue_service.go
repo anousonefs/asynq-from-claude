@@ -20,13 +20,15 @@ func NewQueueService(redis *redis.Client) *QueueService {
 
 func (qs *QueueService) GetWaitingPageInfo(ctx context.Context, eventID string) (*WaitingPageInfo, error) {
 	// Get event sale start time from Redis or database
-	saleStartKey := fmt.Sprintf("event:%s:sale_start", eventID)
-	saleStartStr, err := qs.redis.Get(ctx, saleStartKey).Result()
-	if err != nil {
-		return nil, err
-	}
+	// saleStartKey := fmt.Sprintf("event:%s:sale_start", eventID)
+	// _, err := qs.redis.Get(ctx, saleStartKey).Result()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("qs.redis.Get(saleStartKey: %v): %w", saleStartKey, err)
+	// }
 
-	saleStartTime, err := time.Parse(time.RFC3339, saleStartStr)
+	startTime := "2025-05-28T13:30:05+07:00"
+
+	saleStartTime, err := time.Parse(time.RFC3339, startTime)
 	if err != nil {
 		return nil, err
 	}

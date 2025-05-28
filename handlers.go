@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -21,6 +23,7 @@ func (h *Handlers) GetWaitingPage(c echo.Context) error {
 
 	info, err := h.queueService.GetWaitingPageInfo(c.Request().Context(), eventID)
 	if err != nil {
+		slog.Error(fmt.Sprintf("h.queueService.GetWaitingPageInfo(%v)", eventID), "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 

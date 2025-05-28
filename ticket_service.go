@@ -66,7 +66,6 @@ func (ts *TicketService) TryEnterProcessing(ctx context.Context, customerID, eve
 func (ts *TicketService) LockSeat(ctx context.Context, customerID, eventID, seatID string) error {
 	seatLockKey := fmt.Sprintf("seat_lock:%s:%s", eventID, seatID)
 
-	// Check if seat is already locked
 	exists, err := ts.redis.Exists(ctx, seatLockKey).Result()
 	if err != nil {
 		return err

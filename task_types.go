@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/hibiken/asynq"
 )
@@ -66,11 +67,13 @@ func (h *Handlers) processQueueForEvent(ctx context.Context, eventID string) err
 
 	// Pop customers from queue and try to move them to processing
 	for {
+		slog.Info("processQueueForEvent", "info", queueKey)
 		// Check how many processing slots are available
 		processingSetKey := fmt.Sprintf("processing_set:%s", eventID)
 		currentCount, _ := h.ticketService.redis.SCard(ctx, processingSetKey).Result()
 
 		if currentCount >= MAX_PROCESSING_CUSTOMERS {
+			// block
 			break
 		}
 

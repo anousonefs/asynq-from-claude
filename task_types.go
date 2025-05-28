@@ -86,7 +86,7 @@ func (h *Handlers) processQueueForEvent(ctx context.Context, eventID string) err
 		var entry QueueEntry
 		json.Unmarshal([]byte(entryJSON), &entry)
 
-		// Try to move to processing
+		fmt.Printf("try enter processing: customer_Id: %v, event_id: %v", entry.CustomerID, eventID)
 		success, _ := h.ticketService.TryEnterProcessing(ctx, entry.CustomerID, eventID)
 		if success {
 			// Notify customer they can proceed

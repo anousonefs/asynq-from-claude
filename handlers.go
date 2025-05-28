@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -100,4 +101,70 @@ func (h *Handlers) scheduleNotification(customerID, eventID, message, msgType st
 	payloadByte, _ := json.Marshal(payload)
 	task := asynq.NewTask(TypeNotifyCustomer, payloadByte)
 	h.asynqClient.Enqueue(task)
+}
+
+type Book struct {
+	EventID    string `json:"event_id"`
+	TicketID   string `json:"ticket_id"`
+	CustomerID string `json:"customer_id"`
+}
+
+func (h *Handlers) Book(c echo.Context) error {
+	var req Book
+	eventID := c.Param("eventId")
+
+	if err := c.Bind(&req); err != nil {
+		slog.Error("c.Bind()", "error", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	if eventID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "eventID is empty"})
+	}
+
+	req.EventID = eventID
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err := h.ticketService.Booking(ctx, req.CustomerID, req.EventID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("h.ticketService.Booking(custId: %v, eventID: %v)", req.CustomerID, req.EventID), "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, "success")
+}
+
+func (h *Handlers) CleanQueue(c echo.Context) error {
+	eventID := c.Param("eventId")
+
+	if eventID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "eventID is empty"})
+	}
+
+	ctx := c.Request().Context()
+	err := h.queueService.CleanQueue(ctx, eventID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("h.queueService.CleanQueue(eventID: %v)", eventID), "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, "success")
+}
+
+func (h *Handlers) CleanProcessingQueue(c echo.Context) error {
+	eventID := c.Param("eventId")
+
+	if eventID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "eventID is empty"})
+	}
+
+	ctx := c.Request().Context()
+	err := h.ticketService.CleanProcessingQueue(ctx, eventID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("h.ticketService.CleanProcessingQueue(eventID: %v)", eventID), "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, "success")
 }

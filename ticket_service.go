@@ -60,32 +60,10 @@ func (ts *TicketService) TryEnterProcessing(ctx context.Context, customerID, eve
 	slotJSON, _ := json.Marshal(slot)
 	processingKey := fmt.Sprintf("processing:%s:%s", eventID, customerID)
 	ts.redis.Set(ctx, processingKey, slotJSON, PROCESSING_TIMEOUT)
+	fmt.Printf("=> add customerId: %v, eventId: %v to processing\n", customerID, eventID)
 
 	return true, nil
 }
-
-// func (ts *TicketService) LockSeat(ctx context.Context, customerID, eventID, seatID string) error {
-// 	seatLockKey := fmt.Sprintf("seat_lock:%s:%s", eventID, seatID)
-//
-// 	exists, err := ts.redis.Exists(ctx, seatLockKey).Result()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if exists > 0 {
-// 		return fmt.Errorf("seat already locked")
-// 	}
-//
-// 	// Lock the seat
-// 	lock := &SeatLock{
-// 		SeatID:     seatID,
-// 		CustomerID: customerID,
-// 		EventID:    eventID,
-// 		ExpiresAt:  time.Now().Add(SEAT_LOCK_TIMEOUT),
-// 	}
-//
-// 	lockJSON, _ := json.Marshal(lock)
-// 	return ts.redis.Set(ctx, seatLockKey, lockJSON, SEAT_LOCK_TIMEOUT).Err()
-// }
 
 func (ts *TicketService) ReleaseSeat(ctx context.Context, eventID, seatID string) error {
 	seatLockKey := fmt.Sprintf("seat_lock:%s:%s", eventID, seatID)
@@ -286,6 +264,82 @@ func (ts *TicketService) CleanupExpiredSeatLocks(ctx context.Context, eventID st
 
 	if len(expiredKeys) > 0 {
 		return ts.redis.Del(ctx, expiredKeys...).Err()
+	}
+
+	return nil
+}
+
+func (ts *TicketService) Booking(ctx context.Context, customerID, eventID string) error {
+	if err := ts.ReleaseProcessingSlot(ctx, customerID, eventID); err != nil {
+		return fmt.Errorf("ts.ReleaseProcessingSlot(custID: %v, eventID: %v): %w", customerID, eventID, err)
+	}
+
+	// todo: close goroutine
+	ts.onCustomerLeftProcessing(ctx, eventID)
+
+	return nil
+}
+
+func (ts *TicketService) onCustomerLeftProcessing(ctx context.Context, eventID string) {
+	// When someone leaves processing, try to process the next person in queue
+	go func() {
+		if err := ts.processQueueForEvent2(ctx, eventID); err != nil {
+			slog.Error("ts.processQueueForEvent2", "eventID", eventID, "error", err)
+		}
+	}()
+}
+
+func (ts *TicketService) processQueueForEvent2(ctx context.Context, eventID string) error {
+	queueKey := fmt.Sprintf("queue:%s", eventID)
+	processingSetKey := fmt.Sprintf("processing_set:%s", eventID)
+
+	slog.Info("processQueueForEvent", "eventID", eventID)
+
+	// Check if processing slots are available
+	currentCount, err := ts.redis.SCard(ctx, processingSetKey).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get processing count: %w", err)
+	}
+
+	if currentCount >= MAX_PROCESSING_CUSTOMERS {
+		slog.Info("Processing queue full", "eventID", eventID, "currentCount", currentCount)
+		return nil // No available slots, don't process anyone
+	}
+
+	// Only try to process the next customer in queue
+	entryJSON, err := ts.redis.RPop(ctx, queueKey).Result()
+	if err == redis.Nil {
+		slog.Info("Queue is empty", "eventID", eventID)
+		return nil // Queue is empty
+	}
+	if err != nil {
+		return fmt.Errorf("failed to pop from queue: %w", err)
+	}
+
+	var entry QueueEntry
+	if err := json.Unmarshal([]byte(entryJSON), &entry); err != nil {
+		slog.Error("Failed to unmarshal queue entry", "error", err)
+		return fmt.Errorf("failed to unmarshal queue entry: %w", err)
+	}
+
+	// Try to move to processing
+	success, err := ts.TryEnterProcessing(ctx, entry.CustomerID, eventID)
+	if err != nil {
+		// Put the customer back at the front of the queue if there was an error
+		entryJSONBytes, _ := json.Marshal(entry)
+		ts.redis.LPush(ctx, queueKey, string(entryJSONBytes))
+		return fmt.Errorf("failed to enter processing: %w", err)
+	}
+
+	if success {
+		// todo: pubnub notify
+		// ts.scheduleNotification(entry.CustomerID, eventID, "You can now select your tickets!", "proceed")
+		slog.Info("Customer moved to processing", "customerID", entry.CustomerID, "eventID", eventID)
+	} else {
+		// If couldn't enter processing, put them back at the front of queue
+		entryJSONBytes, _ := json.Marshal(entry)
+		ts.redis.LPush(ctx, queueKey, string(entryJSONBytes))
+		slog.Info("Customer returned to queue front", "customerID", entry.CustomerID, "eventID", eventID)
 	}
 
 	return nil

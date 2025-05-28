@@ -56,4 +56,8 @@ func setupRoutes(e *echo.Echo, handlers *Handlers) {
 
 	// Ticket operations
 	api.POST("/seats/lock", handlers.LockSeat)
+
+	api.POST("/events/:eventId/book", handlers.Book)
+	api.POST("/events/:eventId/clean-queue", handlers.CleanQueue)
+	api.POST("/events/:eventId/clean-processing-queue", handlers.CleanProcessingQueue)
 }

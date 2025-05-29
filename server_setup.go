@@ -78,14 +78,14 @@ func setupRoutes(e *echo.Echo, handlers *Handlers) {
 
 		notification := NotificationMessage{
 			ID:        fmt.Sprintf("test_%d", time.Now().UnixNano()),
-			Type:      "info",
+			Type:      "proceed",
 			Title:     "Test Notification",
 			Text:      "This is a test notification from Go backend!",
 			Sender:    userID,
 			Timestamp: time.Now(),
 		}
 
-		if err := handlers.pubNub.SendToUser(userID, notification); err != nil {
+		if err := handlers.pubNub.SendToCustomer(userID, notification); err != nil {
 			return c.JSON(http.StatusInternalServerError, "")
 		}
 

@@ -239,7 +239,7 @@ func (h *Handlers) SendNotification(c echo.Context) error {
 		Data:   req.Data,
 	}
 
-	if err := h.pubNub.SendToUser(req.UserID, notification); err != nil {
+	if err := h.pubNub.SendToCustomer(req.UserID, notification); err != nil {
 		return c.JSON(500, "error")
 	}
 

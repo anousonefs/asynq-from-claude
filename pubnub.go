@@ -56,8 +56,8 @@ func NewPubNubService(publishKey, subscribeKey, secretKey string) *PubNubService
 }
 
 // Send notification to specific user
-func (p *PubNubService) SendToUser(userID string, message NotificationMessage) error {
-	channel := fmt.Sprintf("user_%s", userID)
+func (p *PubNubService) SendToCustomer(userID string, message NotificationMessage) error {
+	channel := fmt.Sprintf("customer-%s", userID)
 	message.Timestamp = time.Now()
 
 	_, status, err := p.client.Publish().

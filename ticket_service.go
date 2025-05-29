@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	MAX_PROCESSING_CUSTOMERS = 10
-	PROCESSING_TIMEOUT       = 10 * time.Minute
+	MAX_PROCESSING_CUSTOMERS = 1
+	PROCESSING_TIMEOUT       = 7 * time.Minute
 	SEAT_LOCK_TIMEOUT        = 5 * time.Minute
 )
 
@@ -283,14 +283,11 @@ func (ts *TicketService) Booking(ctx context.Context, customerID, eventID string
 
 func (ts *TicketService) onCustomerLeftProcessing(ctx context.Context, eventID string) {
 	// When someone leaves processing, try to process the next person in queue
-	println("=> start")
 	go func() {
 		if err := ts.processQueueForEvent2(ctx, eventID); err != nil {
 			slog.Error("ts.processQueueForEvent2", "eventID", eventID, "error", err)
 		}
-		println("=> end goroutine")
 	}()
-	println("=> ended")
 }
 
 func (ts *TicketService) processQueueForEvent2(ctx context.Context, eventID string) error {
@@ -336,7 +333,17 @@ func (ts *TicketService) processQueueForEvent2(ctx context.Context, eventID stri
 	}
 
 	if success {
-		if err := ts.pubnub.SendToUser(entry.CustomerID, NotificationMessage{}); err != nil {
+
+		notification := NotificationMessage{
+			ID:        fmt.Sprintf("test_%d", time.Now().UnixNano()),
+			Type:      "proceed",
+			Title:     "please come",
+			Text:      "ready to select your ticket!",
+			Sender:    "event-team",
+			Timestamp: time.Now(),
+		}
+
+		if err := ts.pubnub.SendToCustomer(entry.CustomerID, notification); err != nil {
 			slog.Error("ts.pubnub.Publish()", "error", err)
 		}
 		slog.Info("Customer moved to processing", "customerID", entry.CustomerID, "eventID", eventID)

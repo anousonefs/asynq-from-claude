@@ -28,7 +28,7 @@ func (qs *QueueService) GetWaitingPageInfo(ctx context.Context, eventID string) 
 	// 	return nil, fmt.Errorf("qs.redis.Get(saleStartKey: %v): %w", saleStartKey, err)
 	// }
 
-	startTime := "2025-05-28T13:30:05+07:00"
+	startTime := "2025-05-29T13:41:05+07:00"
 
 	saleStartTime, err := time.Parse(time.RFC3339, startTime)
 	if err != nil {

@@ -8,36 +8,34 @@ import (
 	pubnub "github.com/pubnub/go"
 )
 
-// Message structures
-type NotificationMessage struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`
-	Title     string    `json:"title"`
-	Text      string    `json:"text"`
-	Sender    string    `json:"sender,omitempty"`
-	EventID   string    `json:"event_id,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-	Data      any       `json:"data,omitempty"`
-}
+type (
+	NotificationMessage struct {
+		ID        string    `json:"id"`
+		Type      string    `json:"type"`
+		Title     string    `json:"title"`
+		Text      string    `json:"text"`
+		Sender    string    `json:"sender,omitempty"`
+		EventID   string    `json:"event_id,omitempty"`
+		Timestamp time.Time `json:"timestamp"`
+		Data      any       `json:"data,omitempty"`
+	}
+	QueueStatusMessage struct {
+		EventID      string `json:"event_id"`
+		CustomerID   string `json:"customer_id"`
+		Position     int    `json:"position"`
+		Status       string `json:"status"`
+		WaitTime     int    `json:"wait_time_minutes"`
+		TotalInQueue int    `json:"total_in_queue"`
+	}
+	TicketUpdateMessage struct {
+		EventID    string `json:"event_id"`
+		CustomerID string `json:"customer_id"`
+		Action     string `json:"action"` // "seat_locked", "seat_unlocked", "ticket_purchased"
+		SeatID     string `json:"seat_id,omitempty"`
+		Message    string `json:"message"`
+	}
+)
 
-type QueueStatusMessage struct {
-	EventID      string `json:"event_id"`
-	CustomerID   string `json:"customer_id"`
-	Position     int    `json:"position"`
-	Status       string `json:"status"`
-	WaitTime     int    `json:"wait_time_minutes"`
-	TotalInQueue int    `json:"total_in_queue"`
-}
-
-type TicketUpdateMessage struct {
-	EventID    string `json:"event_id"`
-	CustomerID string `json:"customer_id"`
-	Action     string `json:"action"` // "seat_locked", "seat_unlocked", "ticket_purchased"
-	SeatID     string `json:"seat_id,omitempty"`
-	Message    string `json:"message"`
-}
-
-// PubNub Service
 type PubNubService struct {
 	client *pubnub.PubNub
 }
@@ -55,7 +53,6 @@ func NewPubNubService(publishKey, subscribeKey, secretKey string) *PubNubService
 	}
 }
 
-// Send notification to specific user
 func (p *PubNubService) SendToCustomer(userID string, message NotificationMessage) error {
 	channel := fmt.Sprintf("customer-%s", userID)
 	message.Timestamp = time.Now()
@@ -76,7 +73,6 @@ func (p *PubNubService) SendToCustomer(userID string, message NotificationMessag
 	return nil
 }
 
-// Send queue status update
 func (p *PubNubService) SendQueueUpdate(eventID string, message QueueStatusMessage) error {
 	channel := fmt.Sprintf("queue_%s", eventID)
 
@@ -96,7 +92,6 @@ func (p *PubNubService) SendQueueUpdate(eventID string, message QueueStatusMessa
 	return nil
 }
 
-// Send ticket update
 func (p *PubNubService) SendTicketUpdate(eventID string, message TicketUpdateMessage) error {
 	channel := fmt.Sprintf("tickets_%s", eventID)
 
@@ -116,7 +111,6 @@ func (p *PubNubService) SendTicketUpdate(eventID string, message TicketUpdateMes
 	return nil
 }
 
-// Broadcast to all users
 func (p *PubNubService) Broadcast(channel string, message any) error {
 	_, status, err := p.client.Publish().
 		Channel(channel).

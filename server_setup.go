@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/labstack/echo/v4"
@@ -60,4 +63,32 @@ func setupRoutes(e *echo.Echo, handlers *Handlers) {
 	api.POST("/events/:eventId/book", handlers.Book)
 	api.POST("/events/:eventId/clean-queue", handlers.CleanQueue)
 	api.POST("/events/:eventId/clean-processing-queue", handlers.CleanProcessingQueue)
+
+	api.POST("/notify", handlers.SendNotification)
+	api.POST("/queue/update", handlers.UpdateQueueStatus)
+	api.POST("/tickets/update", handlers.UpdateTicketStatus)
+	api.POST("/broadcast", handlers.Broadcast)
+
+	// Example routes for testing
+	api.GET("/test/notification/:userID", func(c echo.Context) error {
+		userID := c.Param("userID")
+
+		// const { message, publisher, timetoken } = messageEvent;
+		// publisher
+
+		notification := NotificationMessage{
+			ID:        fmt.Sprintf("test_%d", time.Now().UnixNano()),
+			Type:      "info",
+			Title:     "Test Notification",
+			Text:      "This is a test notification from Go backend!",
+			Sender:    userID,
+			Timestamp: time.Now(),
+		}
+
+		if err := handlers.pubNub.SendToUser(userID, notification); err != nil {
+			return c.JSON(http.StatusInternalServerError, "")
+		}
+
+		return c.JSON(http.StatusOK, "success")
+	})
 }

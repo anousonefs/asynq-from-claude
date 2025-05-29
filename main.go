@@ -21,21 +21,15 @@ func main() {
 	redisOpt := asynq.RedisClientOpt{Addr: "localhost:6379"}
 	redisClient := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 
-	cfg := PubNubConfig{
-		PublishKey: os.Getenv("PUBNUB_PUBLISH_KEY"),
-		SecretKey:  os.Getenv("PUBNUB_SECRET_KEY"),
-		UUIDKey:    os.Getenv("PUBNUB_UUID"),
-		UUIDSubKey: os.Getenv("PUBNUB_UUID_SUB_KEY"),
-	}
-
-	pubnub, err := NewPubnub(&cfg)
-	if err != nil {
-		panic(err)
-	}
+	pubNubService := NewPubNubService(
+		os.Getenv("PN_PUBLISH_KEY"),
+		os.Getenv("PN_SUBSCRIBE_KEY"),
+		os.Getenv("PN_SECRET_KEY"),
+	)
 
 	// Initialize services
 	queueService := NewQueueService(redisClient)
-	ticketService := NewTicketService(redisClient, pubnub)
+	ticketService := NewTicketService(redisClient, pubNubService)
 	notificationService := NewNotificationService() // PubNub integration
 
 	// Initialize Asynq client and server
@@ -48,6 +42,7 @@ func main() {
 		ticketService:       ticketService,
 		notificationService: notificationService,
 		asynqClient:         asynqClient,
+		pubNub:              pubNubService,
 	}
 
 	// Start Asynq server in goroutine

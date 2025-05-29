@@ -1,89 +1,135 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
+	"log"
+	"time"
 
-	pubnubgo "github.com/pubnub/go/v7"
+	pubnub "github.com/pubnub/go"
 )
 
-var _ Pubnub = (*pubnub)(nil)
-
-type PubNubConfig struct {
-	PublishKey, SubscribeKey, SecretKey, UUIDKey, UUIDSubKey string
+// Message structures
+type NotificationMessage struct {
+	ID        string    `json:"id"`
+	Type      string    `json:"type"`
+	Title     string    `json:"title"`
+	Text      string    `json:"text"`
+	Sender    string    `json:"sender,omitempty"`
+	EventID   string    `json:"event_id,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	Data      any       `json:"data,omitempty"`
 }
 
-func NewPubnub(pnCfg *PubNubConfig) (Pubnub, error) {
-	if pnCfg == nil {
-		return nil, fmt.Errorf("[NewPubnub] pnCfg: must not be nil")
+type QueueStatusMessage struct {
+	EventID      string `json:"event_id"`
+	CustomerID   string `json:"customer_id"`
+	Position     int    `json:"position"`
+	Status       string `json:"status"`
+	WaitTime     int    `json:"wait_time_minutes"`
+	TotalInQueue int    `json:"total_in_queue"`
+}
+
+type TicketUpdateMessage struct {
+	EventID    string `json:"event_id"`
+	CustomerID string `json:"customer_id"`
+	Action     string `json:"action"` // "seat_locked", "seat_unlocked", "ticket_purchased"
+	SeatID     string `json:"seat_id,omitempty"`
+	Message    string `json:"message"`
+}
+
+// PubNub Service
+type PubNubService struct {
+	client *pubnub.PubNub
+}
+
+func NewPubNubService(publishKey, subscribeKey, secretKey string) *PubNubService {
+	config := pubnub.NewConfig() // Set a default UUID
+	config.PublishKey = publishKey
+	config.SubscribeKey = subscribeKey
+	config.SecretKey = secretKey // Add if you have secret key
+
+	pn := pubnub.NewPubNub(config)
+
+	return &PubNubService{
+		client: pn,
 	}
-
-	cfg := pubnubgo.NewConfigWithUserId(pubnubgo.UserId(pnCfg.UUIDKey))
-	cfg.PublishKey = pnCfg.PublishKey
-	cfg.SubscribeKey = pnCfg.SubscribeKey
-	cfg.SecretKey = pnCfg.SecretKey
-
-	return &pubnub{
-		pn:         pubnubgo.NewPubNub(cfg),
-		uuidSubKey: pnCfg.UUIDSubKey,
-	}, nil
 }
 
-type Pubnub interface {
-	Publish(ctx context.Context, uuid string, messagePayload any) (string, error)
-	GenGrantToken(ctx context.Context) (string, error)
-}
+// Send notification to specific user
+func (p *PubNubService) SendToUser(userID string, message NotificationMessage) error {
+	channel := fmt.Sprintf("user_%s", userID)
+	message.Timestamp = time.Now()
 
-type pubnub struct {
-	pn         *pubnubgo.PubNub
-	uuidSubKey string
-}
-
-func (p *pubnub) Publish(ctx context.Context, uuid string, messagePayload any) (string, error) {
-	messageJSON, err := setPrepareMessage(messagePayload)
+	_, status, err := p.client.Publish().
+		Channel(channel).
+		Message(message).
+		Execute()
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to publish to user channel: %w", err)
 	}
 
-	// Add channel to message
-	channel := fmt.Sprintf("channel-%s", uuid)
-
-	// Publish the message to a channel
-	publish := p.pn.Publish()
-	publish.Channel(channel).Message(string(messageJSON))
-	resp, _, err := publish.Execute()
-	if err != nil {
-		return "", err
+	if status.Error != nil {
+		return fmt.Errorf("pubnub error: %s", status.Error)
 	}
 
-	s := strconv.FormatInt(resp.Timestamp, 10)
-	return s, nil
+	log.Printf("Message sent to user %s: %s", userID, message.Title)
+	return nil
 }
 
-func (p *pubnub) GenGrantToken(ctx context.Context) (string, error) {
-	grantToken := p.pn.GrantTokenWithContext(ctx)
-	permissions := map[string]pubnubgo.ChannelPermissions{
-		"^channel-[A-Za-z0-9]*$": {
-			Read: true,
-		},
-	}
+// Send queue status update
+func (p *PubNubService) SendQueueUpdate(eventID string, message QueueStatusMessage) error {
+	channel := fmt.Sprintf("queue_%s", eventID)
 
-	token, _, err := grantToken.TTL(60).AuthorizedUUID(p.uuidSubKey).ChannelsPattern(permissions).Execute()
+	_, status, err := p.client.Publish().
+		Channel(channel).
+		Message(message).
+		Execute()
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to publish queue update: %w", err)
 	}
 
-	return token.Data.Token, nil
+	if status.Error != nil {
+		return fmt.Errorf("pubnub error: %s", status.Error)
+	}
+
+	log.Printf("Queue update sent for event %s", eventID)
+	return nil
 }
 
-// setPrepareMessage is a function to format message to JSON
-func setPrepareMessage(messagePayload any) (string, error) {
-	messageJSON, err := json.Marshal(messagePayload)
+// Send ticket update
+func (p *PubNubService) SendTicketUpdate(eventID string, message TicketUpdateMessage) error {
+	channel := fmt.Sprintf("tickets_%s", eventID)
+
+	_, status, err := p.client.Publish().
+		Channel(channel).
+		Message(message).
+		Execute()
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to publish ticket update: %w", err)
 	}
 
-	return string(messageJSON), nil
+	if status.Error != nil {
+		return fmt.Errorf("pubnub error: %s", status.Error)
+	}
+
+	log.Printf("Ticket update sent for event %s: %s", eventID, message.Action)
+	return nil
+}
+
+// Broadcast to all users
+func (p *PubNubService) Broadcast(channel string, message any) error {
+	_, status, err := p.client.Publish().
+		Channel(channel).
+		Message(message).
+		Execute()
+	if err != nil {
+		return fmt.Errorf("failed to broadcast: %w", err)
+	}
+
+	if status.Error != nil {
+		return fmt.Errorf("pubnub error: %s", status.Error)
+	}
+
+	log.Printf("Broadcast sent to channel %s", channel)
+	return nil
 }

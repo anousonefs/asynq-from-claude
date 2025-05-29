@@ -17,6 +17,7 @@ type Handlers struct {
 	ticketService       *TicketService
 	notificationService *NotificationService
 	asynqClient         *asynq.Client
+	pubNub              *PubNubService
 }
 
 func (h *Handlers) GetWaitingPage(c echo.Context) error {
@@ -166,4 +167,81 @@ func (h *Handlers) CleanProcessingQueue(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, "success")
+}
+
+// Update queue status
+func (h *Handlers) UpdateQueueStatus(c echo.Context) error {
+	var req QueueStatusMessage
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "eventID is empty"})
+	}
+
+	if err := h.pubNub.SendQueueUpdate(req.EventID, req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "eventID is empty"})
+	}
+
+	return c.JSON(http.StatusOK, "success")
+}
+
+// Update ticket status
+func (h *Handlers) UpdateTicketStatus(c echo.Context) error {
+	var req TicketUpdateMessage
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(400, "bind error")
+	}
+
+	if err := h.pubNub.SendTicketUpdate(req.EventID, req); err != nil {
+		return c.JSON(500, "error")
+	}
+
+	return c.JSON(200, "success")
+}
+
+// Broadcast message
+func (h *Handlers) Broadcast(c echo.Context) error {
+	var req struct {
+		Channel string `json:"channel" binding:"required"`
+		Message any    `json:"message" binding:"required"`
+	}
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(400, "bind error")
+	}
+
+	if err := h.pubNub.Broadcast(req.Channel, req.Message); err != nil {
+		return c.JSON(500, "error")
+	}
+
+	return c.JSON(200, "success")
+}
+
+func (h *Handlers) SendNotification(c echo.Context) error {
+	var req struct {
+		UserID  string `json:"user_id" binding:"required"`
+		Type    string `json:"type" binding:"required"`
+		Title   string `json:"title" binding:"required"`
+		Message string `json:"message" binding:"required"`
+		Data    any    `json:"data,omitempty"`
+	}
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(400, "bind erro")
+	}
+
+	notification := NotificationMessage{
+		ID:     fmt.Sprintf("notif_%d", time.Now().UnixNano()),
+		Type:   req.Type,
+		Title:  req.Title,
+		Text:   req.Message,
+		Sender: req.UserID,
+		Data:   req.Data,
+	}
+
+	if err := h.pubNub.SendToUser(req.UserID, notification); err != nil {
+		return c.JSON(500, "error")
+	}
+
+	return c.JSON(200, "success")
 }

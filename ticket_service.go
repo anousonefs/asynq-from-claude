@@ -19,10 +19,10 @@ const (
 
 type TicketService struct {
 	redis  *redis.Client
-	pubnub Pubnub
+	pubnub *PubNubService
 }
 
-func NewTicketService(redis *redis.Client, pubnub Pubnub) *TicketService {
+func NewTicketService(redis *redis.Client, pubnub *PubNubService) *TicketService {
 	return &TicketService{redis: redis, pubnub: pubnub}
 }
 
@@ -336,7 +336,7 @@ func (ts *TicketService) processQueueForEvent2(ctx context.Context, eventID stri
 	}
 
 	if success {
-		if _, err := ts.pubnub.Publish(ctx, entry.CustomerID, "you can now select your tickets!"); err != nil {
+		if err := ts.pubnub.SendToUser(entry.CustomerID, NotificationMessage{}); err != nil {
 			slog.Error("ts.pubnub.Publish()", "error", err)
 		}
 		slog.Info("Customer moved to processing", "customerID", entry.CustomerID, "eventID", eventID)
